@@ -1,10 +1,10 @@
 package pow
 
 import (
+    "crypto/rand"
     "crypto/sha256"
     "encoding/hex"
-    "math/rand"
-    "time"
+    "fmt"
 )
 
 type PoW struct {
@@ -15,11 +15,12 @@ func NewPoW(difficulty int) *PoW {
     return &PoW{difficulty: difficulty}
 }
 
-func (p *PoW) GenerateChallenge(length int) string {
-    rand.Seed(time.Now().UnixNano())
+func (p *PoW) GenerateChallenge(length int) (string, error) {
     bytes := make([]byte, length)
-    rand.Read(bytes)
-    return hex.EncodeToString(bytes)
+    if _, err := rand.Read(bytes); err != nil {
+        return "", fmt.Errorf("failed to generate challenge: %w", err)
+    }
+    return hex.EncodeToString(bytes), nil
 }
 
 func (p *PoW) VerifySolution(challenge, solution string) bool {
