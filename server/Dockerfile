@@ -4,7 +4,8 @@ WORKDIR /app
 
 COPY . .
 
-RUN go mod init server && \
+RUN cd /app && \
+    go mod init server && \
     go mod tidy && \
     go build -o server ./cmd
 
