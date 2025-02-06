@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	c := client.NewClient(":8080", 4, 30*time.Second)
+	c := client.NewClient("server:8080", 4, 30*time.Second)
 	
 	quote, err := c.GetQuote()
 	if err != nil {
