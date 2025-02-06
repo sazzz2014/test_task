@@ -67,7 +67,13 @@ func (s *Server) Start(ctx context.Context) error {
 
 func (s *Server) Stop() error {
 	s.logger.Info("Stopping server...")
-	close(s.shutdown)
+	
+	select {
+	case <-s.shutdown: // Проверяем, не закрыт ли уже канал
+		// Канал уже закрыт, ничего не делаем
+	default:
+		close(s.shutdown)
+	}
 
 	// Закрываем listener для прекращения приема новых соединений
 	if s.listener != nil {
