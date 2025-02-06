@@ -8,8 +8,11 @@ import (
 	"syscall"
 
 	"server/internal/config"
+	"server/internal/logger"
+	"server/internal/metrics"
 	"server/internal/pow"
 	"server/internal/quotes"
+	"server/internal/ratelimit"
 	"server/internal/server"
 )
 
@@ -23,7 +26,19 @@ func main() {
 		log.Fatalf("Failed to initialize quote service: %v", err)
 	}
 
-	srv := server.NewServer(cfg, powService, quoteService)
+	// Создаем все необходимые сервисы
+	loggerService := logger.NewLogger()
+	metricsService := metrics.NewMetrics()
+	ipControlService := ratelimit.NewIPControl(cfg)
+
+	srv := server.NewServer(
+		cfg,
+		powService,
+		quoteService,
+		metricsService,
+		ipControlService,
+		loggerService,
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
