@@ -3,6 +3,8 @@ package ratelimit
 import (
 	"sync"
 	"time"
+	
+	"server/internal/config"
 )
 
 type IPControl struct {

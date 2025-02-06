@@ -7,7 +7,6 @@ import (
     "net"
     "strings"
     "sync"
-    "sync/atomic"
     "time"
 
     "server/internal/config"
@@ -38,6 +37,8 @@ func NewServer(cfg *config.Config, pow *pow.PoW, qs *quotes.QuoteService) *Serve
         quoteService: qs,
         shutdown:     make(chan struct{}),
         logger:       logger.NewLogger(),
+        metrics:      metrics.NewMetrics(),
+        ipControl:    ratelimit.NewIPControl(cfg),
     }
 }
 
@@ -62,25 +63,28 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) Stop() error {
+    s.logger.Info("Stopping server...")
     close(s.shutdown)
     
-    // Даём время на завершение текущих соединений
+    // Закрываем listener для прекращения приема новых соединений
+    if s.listener != nil {
+        s.listener.Close()
+    }
+
+    // Ожидаем завершения всех активных соединений
     done := make(chan struct{})
     go func() {
-        s.activeConnections.Wait()
+        s.metrics.Wait() // Ждем пока все соединения завершатся
         close(done)
     }()
 
     select {
     case <-done:
         s.logger.Info("All connections closed gracefully")
-    case <-time.After(30 * time.Second):
+    case <-time.After(s.config.ShutdownTimeout):
         s.logger.Info("Shutdown timeout exceeded, forcing shutdown")
     }
 
-    if s.listener != nil {
-        return s.listener.Close()
-    }
     return nil
 }
 
@@ -94,23 +98,22 @@ func (s *Server) acceptConnections(ctx context.Context) {
             default:
                 if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
                     time.Sleep(time.Millisecond * 100)
+                    continue
                 }
-                continue
+                s.logger.Error("Accept error: %v", err)
+                return
             }
         }
 
-        if s.connectionCount.Load() >= int32(s.config.MaxConnections) {
+        // Проверяем лимит подключений
+        currentConnections := s.metrics.GetActiveConnections()
+        if currentConnections >= int64(s.config.MaxConnections) {
+            s.logger.Info("Connection limit reached, rejecting connection from %s", conn.RemoteAddr())
             conn.Close()
             continue
         }
 
-        s.connectionCount.Add(1)
-        s.activeConnections.Add(1)
-        go func(conn net.Conn) {
-            s.handleConnection(ctx, conn)
-            s.connectionCount.Add(-1)
-            s.activeConnections.Done()
-        }(conn)
+        go s.handleConnection(ctx, conn)
     }
 }
 
@@ -131,16 +134,16 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
     s.metrics.IncTotalConnections()
     s.metrics.IncActiveConnections()
-    
+
+    // Устанавливаем таймауты
+    deadline := time.Now().Add(s.config.ReadTimeout)
+    conn.SetDeadline(deadline)
+
     s.connections.Store(conn.RemoteAddr(), conn)
     defer s.connections.Delete(conn.RemoteAddr())
 
     reader := bufio.NewReader(conn)
     
-    // Установка таймаутов
-    conn.SetReadDeadline(time.Now().Add(time.Duration(s.config.ReadTimeout) * time.Second))
-    conn.SetWriteDeadline(time.Now().Add(time.Duration(s.config.WriteTimeout) * time.Second))
-
     // Ожидаем HELLO
     message, err := reader.ReadString('\n')
     if err != nil || !strings.HasPrefix(message, protocol.CmdHello) {
