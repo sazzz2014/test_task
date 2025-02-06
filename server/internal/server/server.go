@@ -15,6 +15,8 @@ import (
     "server/internal/pow"
     "server/internal/protocol"
     "server/internal/quotes"
+    "server/internal/metrics"
+    "server/internal/ratelimit"
 )
 
 type Server struct {
@@ -24,9 +26,9 @@ type Server struct {
     listener     net.Listener
     connections  sync.Map
     shutdown     chan struct{}
-    connectionCount atomic.Int32
-    activeConnections sync.WaitGroup
-    logger      *logger.Logger
+    metrics      *metrics.Metrics
+    ipControl    *ratelimit.IPControl
+    logger       *logger.Logger
 }
 
 func NewServer(cfg *config.Config, pow *pow.PoW, qs *quotes.QuoteService) *Server {
@@ -43,21 +45,42 @@ func (s *Server) Start(ctx context.Context) error {
     var err error
     s.listener, err = net.Listen("tcp", s.config.Port)
     if err != nil {
-        return err
+        return fmt.Errorf("failed to start server: %w", err)
     }
+    s.logger.Info("Server started on %s", s.config.Port)
+
+    go func() {
+        <-ctx.Done()
+        s.logger.Info("Initiating graceful shutdown...")
+        s.Stop()
+    }()
 
     go s.acceptConnections(ctx)
 
     <-ctx.Done()
-    return s.Stop()
+    return nil
 }
 
 func (s *Server) Stop() error {
     close(s.shutdown)
-    if s.listener != nil {
-        s.listener.Close()
+    
+    // Даём время на завершение текущих соединений
+    done := make(chan struct{})
+    go func() {
+        s.activeConnections.Wait()
+        close(done)
+    }()
+
+    select {
+    case <-done:
+        s.logger.Info("All connections closed gracefully")
+    case <-time.After(30 * time.Second):
+        s.logger.Info("Shutdown timeout exceeded, forcing shutdown")
     }
-    s.activeConnections.Wait()
+
+    if s.listener != nil {
+        return s.listener.Close()
+    }
     return nil
 }
 
@@ -94,9 +117,21 @@ func (s *Server) acceptConnections(ctx context.Context) {
 func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
     defer func() {
         conn.Close()
-        s.connectionCount.Add(-1)
+        s.metrics.DecActiveConnections()
     }()
 
+    // Получаем IP клиента
+    ip := conn.RemoteAddr().(*net.TCPAddr).IP.String()
+    
+    // Проверяем ограничения по IP
+    if !s.ipControl.IsAllowed(ip) {
+        s.logger.Info("Connection rejected from %s (rate limit/blacklist)", ip)
+        return
+    }
+
+    s.metrics.IncTotalConnections()
+    s.metrics.IncActiveConnections()
+    
     s.connections.Store(conn.RemoteAddr(), conn)
     defer s.connections.Delete(conn.RemoteAddr())
 
@@ -133,9 +168,12 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
     // Проверяем решение
     if s.pow.VerifySolution(challenge, parts[1]) {
+        s.metrics.IncSuccessChallenges()
         quote := s.quoteService.GetRandomQuote()
+        s.metrics.IncTotalQuotesSent()
         fmt.Fprintf(conn, "%s %s\n", protocol.CmdQuote, quote)
     } else {
+        s.metrics.IncFailedChallenges()
         fmt.Fprintf(conn, "%s\n", protocol.CmdError)
     }
 } 
