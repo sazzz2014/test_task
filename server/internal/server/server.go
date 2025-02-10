@@ -150,14 +150,24 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	s.metrics.IncTotalConnections()
 	s.metrics.IncActiveConnections()
 
-	// Устанавливаем таймауты
-	conn.SetReadDeadline(time.Now().Add(s.readTimeout))
-	conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
+	// Добавляем контекст с таймаутом для всей обработки соединения
+	connCtx, cancel := context.WithTimeout(ctx, s.config.ReadTimeout)
+	defer cancel()
 
-	s.connections.Store(conn.RemoteAddr(), conn)
-	defer s.connections.Delete(conn.RemoteAddr())
+	// Добавляем обработку контекста
+	go func() {
+		<-connCtx.Done()
+		conn.Close()
+	}()
 
-	reader := bufio.NewReaderSize(conn, 1024)
+	// Ограничиваем размер буфера чтения
+	reader := bufio.NewReaderSize(conn, s.config.BufferSize)
+
+	// Проверяем размер сообщения
+	if reader.Buffered() > s.config.MaxMessageSize {
+		s.logger.Error("Message too large from %s", conn.RemoteAddr())
+		return
+	}
 
 	// Ожидаем HELLO
 	message, err := reader.ReadString('\n')

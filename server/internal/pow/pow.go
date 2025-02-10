@@ -46,24 +46,29 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
         return false
     }
     
+    // Проверка длины solution
+    if len(solution) > 64 { // Максимальная длина hex-строки для 32 байт
+        return false
+    }
+    
     // Проверяем решение
     combined := challenge + solution
     hash := sha256.Sum256([]byte(combined))
     
-    valid := true
+    // Проверка битов (оптимизированная версия)
     for i := 0; i < p.difficulty; i++ {
-        if hash[i/8]>>(7-(i%8))&1 != 0 {
-            valid = false
-            break
+        byteIndex := i / 8
+        bitIndex := 7 - (i % 8)
+        if (hash[byteIndex] >> bitIndex) & 1 != 0 {
+            return false
         }
     }
     
-    if valid {
-        p.validSolutions.Add(1)
-        p.usedSolutions.Store(key, time.Now())
-    }
+    // Сохраняем решение с временем жизни
+    p.validSolutions.Add(1)
+    p.usedSolutions.Store(key, time.Now())
     
-    return valid
+    return true
 }
 
 func (p *PoW) cleanupRoutine() {

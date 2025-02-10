@@ -37,8 +37,8 @@ func NewConfig() *Config {
         RateLimitWindow:   time.Minute,
         BlacklistThreshold: 5,
         BlacklistDuration: 24 * time.Hour,
-        MaxMessageSize:    1024,
+        MaxMessageSize:    1024,    // Ограничиваем размер сообщения
         SolutionTTL:       5 * time.Minute,
-        BufferSize:        1024,
+        BufferSize:        1024,    // Ограничиваем размер буфера
     }
 } 
