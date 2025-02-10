@@ -24,6 +24,9 @@ type Server struct {
 	metrics      interfaces.MetricsCollector
 	ipControl    interfaces.RateLimiter
 	logger       interfaces.Logger
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+	maxConn      int
 }
 
 func NewServer(
@@ -42,6 +45,9 @@ func NewServer(
 		logger:       logger,
 		metrics:      metrics,
 		ipControl:    ipControl,
+		readTimeout:  cfg.ReadTimeout,
+		writeTimeout: cfg.WriteTimeout,
+		maxConn:     cfg.MaxConnections,
 	}
 }
 
@@ -116,7 +122,7 @@ func (s *Server) acceptConnections(ctx context.Context) {
 
 		// Проверяем лимит подключений
 		currentConnections := s.metrics.GetActiveConnections()
-		if currentConnections >= int64(s.config.MaxConnections) {
+		if currentConnections >= int64(s.maxConn) {
 			s.logger.Info("Connection limit reached, rejecting connection from %s", conn.RemoteAddr())
 			conn.Close()
 			continue
@@ -145,8 +151,8 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	s.metrics.IncActiveConnections()
 
 	// Устанавливаем таймауты
-	deadline := time.Now().Add(s.config.ReadTimeout)
-	conn.SetDeadline(deadline)
+	conn.SetReadDeadline(time.Now().Add(s.readTimeout))
+	conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 
 	s.connections.Store(conn.RemoteAddr(), conn)
 	defer s.connections.Delete(conn.RemoteAddr())

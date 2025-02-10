@@ -153,6 +153,30 @@ func TestServer_HandleConnection_RateLimit(t *testing.T) {
 	}
 }
 
+func TestServer_HandleConnection_Timeout(t *testing.T) {
+	srv, mockPow, mockQuotes, mockMetrics, mockRateLimiter, mockLogger := setupTest(t)
+
+	// Создаем пару тестовых соединений
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	server = fakeTCPConn{Conn: server}
+
+	// Настройка таймаута
+	mockRateLimiter.EXPECT().IsAllowed(gomock.Any()).Return(true)
+	mockMetrics.EXPECT().IncTotalConnections()
+	mockMetrics.EXPECT().IncActiveConnections()
+	mockMetrics.EXPECT().DecActiveConnections()
+
+	// Запускаем обработку соединения
+	go srv.handleConnection(context.Background(), server)
+
+	// Имитируем клиентское взаимодействие с таймаутом
+	client.SetDeadline(time.Now().Add(1 * time.Millisecond)) // Устанавливаем таймаут
+	_, err := client.Write([]byte("HELLO\n"))
+	require.Error(t, err) // Ожидаем ошибку из-за таймаута
+}
+
 func TestServer_Stop(t *testing.T) {
 	srv, _, _, mockMetrics, _, mockLogger := setupTest(t)
 
