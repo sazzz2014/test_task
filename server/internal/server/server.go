@@ -169,7 +169,6 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		return
 	}
 
-	// Ожидаем HELLO
 	message, err := reader.ReadString('\n')
 	if err != nil {
 		if err == bufio.ErrBufferFull {

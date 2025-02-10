@@ -1,6 +1,7 @@
 package config
 
 import (
+    "fmt"
     "time"
 )
 
@@ -23,8 +24,24 @@ type Config struct {
     BufferSize         int           // Размер буфера для чтения
 }
 
+func (c *Config) Validate() error {
+    if c.Port == "" {
+        return fmt.Errorf("port must be specified")
+    }
+    if c.MaxConnections <= 0 {
+        return fmt.Errorf("max connections must be positive")
+    }
+    if c.ReadTimeout <= 0 || c.WriteTimeout <= 0 {
+        return fmt.Errorf("timeouts must be positive")
+    }
+    if c.BufferSize <= 0 || c.MaxMessageSize <= 0 {
+        return fmt.Errorf("buffer sizes must be positive")
+    }
+    return nil
+}
+
 func NewConfig() *Config {
-    return &Config{
+    cfg := &Config{
         Port:              ":8080",
         QuotesFile:        "quotes.json",
         PowDifficulty:     4,
@@ -41,4 +58,8 @@ func NewConfig() *Config {
         SolutionTTL:       5 * time.Minute,
         BufferSize:        1024,    // Ограничиваем размер буфера
     }
+    if err := cfg.Validate(); err != nil {
+        panic(fmt.Sprintf("invalid config: %v", err))
+    }
+    return cfg
 } 
