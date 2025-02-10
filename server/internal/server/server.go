@@ -169,6 +169,16 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		return
 	}
 
+	// Проверяем формат HELLO
+	message = strings.TrimSpace(message)
+	if message != protocol.CmdHello {
+		s.logger.Error("Invalid hello message from %s: %s", conn.RemoteAddr(), message)
+		return
+	}
+
+	// Устанавливаем таймаут для следующего чтения
+	conn.SetReadDeadline(time.Now().Add(s.readTimeout))
+
 	// Генерируем и отправляем вызов
 	challenge, err := s.pow.GenerateChallenge(s.config.ChallengeLength)
 	if err != nil {
@@ -183,10 +193,15 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 		return
 	}
 
-	parts := strings.Fields(message)
+	// Проверяем формат SOLUTION
+	parts := strings.Fields(strings.TrimSpace(message))
 	if len(parts) != 2 || parts[0] != protocol.CmdSolution {
+		s.logger.Error("Invalid solution format from %s", conn.RemoteAddr())
 		return
 	}
+
+	// Обновляем таймаут перед отправкой ответа
+	conn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 
 	// Проверяем решение
 	if s.pow.VerifySolution(challenge, parts[1]) {

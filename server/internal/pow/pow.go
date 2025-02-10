@@ -7,12 +7,16 @@ import (
     "fmt"
     "sync"
     "time"
+    "sync/atomic"
 )
 
 type PoW struct {
     difficulty int
     usedSolutions sync.Map // для хранения использованных решений
     cleanupInterval time.Duration
+    totalAttempts   atomic.Int64
+    validSolutions  atomic.Int64
+    replayAttempts  atomic.Int64
 }
 
 func NewPoW(difficulty int) *PoW {
@@ -33,9 +37,12 @@ func (p *PoW) GenerateChallenge(length int) (string, error) {
 }
 
 func (p *PoW) VerifySolution(challenge, solution string) bool {
-    // Проверяем, не было ли уже использовано это решение
+    p.totalAttempts.Add(1)
+    
+    // Проверка на replay
     key := challenge + solution
     if _, exists := p.usedSolutions.Load(key); exists {
+        p.replayAttempts.Add(1)
         return false
     }
     
@@ -52,7 +59,7 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
     }
     
     if valid {
-        // Сохраняем использованное решение
+        p.validSolutions.Add(1)
         p.usedSolutions.Store(key, time.Now())
     }
     
@@ -77,4 +84,12 @@ func (p *PoW) cleanupRoutine() {
 func (p *PoW) GenerateAndVerify(challenge, solution string) (bool, error) {
     // Проверка решения
     return p.VerifySolution(challenge, solution), nil
+}
+
+func (p *PoW) GetStats() map[string]int64 {
+    return map[string]int64{
+        "total_attempts":   p.totalAttempts.Load(),
+        "valid_solutions": p.validSolutions.Load(),
+        "replay_attempts": p.replayAttempts.Load(),
+    }
 } 
