@@ -12,17 +12,19 @@ import (
 
 type PoW struct {
     difficulty int
-    usedSolutions sync.Map // для хранения использованных решений
+    usedSolutions sync.Map
     cleanupInterval time.Duration
-    totalAttempts   atomic.Int64
-    validSolutions  atomic.Int64
-    replayAttempts  atomic.Int64
+    solutionTTL time.Duration  // Добавляем TTL для решений
+    totalAttempts atomic.Int64
+    validSolutions atomic.Int64
+    replayAttempts atomic.Int64
 }
 
 func NewPoW(difficulty int) *PoW {
     pow := &PoW{
         difficulty: difficulty,
         cleanupInterval: 5 * time.Minute,
+        solutionTTL: 10 * time.Minute, // Устанавливаем TTL
     }
     go pow.cleanupRoutine()
     return pow
@@ -39,6 +41,11 @@ func (p *PoW) GenerateChallenge(length int) (string, error) {
 func (p *PoW) VerifySolution(challenge, solution string) bool {
     p.totalAttempts.Add(1)
     
+    // Базовые проверки
+    if len(challenge) == 0 || len(solution) == 0 {
+        return false
+    }
+    
     // Проверка на replay
     key := challenge + solution
     if _, exists := p.usedSolutions.Load(key); exists {
@@ -51,8 +58,8 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
         return false
     }
     
-    // Проверка длины solution
-    if len(solution) > 64 { 
+    // Проверка длины solution (32 байта в hex)
+    if len(solution) > 64 {
         return false
     }
     
@@ -61,8 +68,14 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
     hash := sha256.Sum256([]byte(combined))
     
     // Оптимизированная битовая проверка
-    for i := 0; i < p.difficulty; i++ {
-        if (hash[i/8] >> (7 - (i % 8))) & 1 != 0 {
+    mask := byte(0xFF) << (8 - (p.difficulty % 8))
+    for i := 0; i < p.difficulty/8; i++ {
+        if hash[i] != 0 {
+            return false
+        }
+    }
+    if p.difficulty%8 > 0 {
+        if (hash[p.difficulty/8] & mask) != 0 {
             return false
         }
     }
@@ -76,11 +89,13 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
 
 func (p *PoW) cleanupRoutine() {
     ticker := time.NewTicker(p.cleanupInterval)
+    defer ticker.Stop()
+    
     for range ticker.C {
         now := time.Now()
         p.usedSolutions.Range(func(key, value interface{}) bool {
             if timestamp, ok := value.(time.Time); ok {
-                if now.Sub(timestamp) > p.cleanupInterval {
+                if now.Sub(timestamp) > p.solutionTTL {
                     p.usedSolutions.Delete(key)
                 }
             }
@@ -99,5 +114,16 @@ func (p *PoW) GetStats() map[string]int64 {
         "total_attempts":   p.totalAttempts.Load(),
         "valid_solutions": p.validSolutions.Load(),
         "replay_attempts": p.replayAttempts.Load(),
+    }
+}
+
+func (p *PoW) GetDetailedStats() map[string]interface{} {
+    return map[string]interface{}{
+        "total_attempts": p.totalAttempts.Load(),
+        "valid_solutions": p.validSolutions.Load(),
+        "replay_attempts": p.replayAttempts.Load(),
+        "difficulty": p.difficulty,
+        "solution_ttl_minutes": p.solutionTTL.Minutes(),
+        "cleanup_interval_minutes": p.cleanupInterval.Minutes(),
     }
 } 
