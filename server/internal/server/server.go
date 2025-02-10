@@ -157,11 +157,15 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	s.connections.Store(conn.RemoteAddr(), conn)
 	defer s.connections.Delete(conn.RemoteAddr())
 
-	reader := bufio.NewReader(conn)
+	reader := bufio.NewReaderSize(conn, 1024)
 
 	// Ожидаем HELLO
 	message, err := reader.ReadString('\n')
-	if err != nil || !strings.HasPrefix(message, protocol.CmdHello) {
+	if err != nil {
+		if err == bufio.ErrBufferFull {
+			s.logger.Error("Buffer overflow from %s", conn.RemoteAddr())
+			return
+		}
 		return
 	}
 

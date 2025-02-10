@@ -18,6 +18,9 @@ type Config struct {
     RateLimitWindow    time.Duration  // Окно для rate limiting
     BlacklistThreshold int           // Порог для занесения в черный список
     BlacklistDuration  time.Duration  // Время блокировки IP
+    MaxMessageSize     int           // Максимальный размер сообщения
+    SolutionTTL        time.Duration // Время жизни решения PoW
+    BufferSize         int           // Размер буфера для чтения
 }
 
 func NewConfig() *Config {
@@ -34,5 +37,8 @@ func NewConfig() *Config {
         RateLimitWindow:   time.Minute,
         BlacklistThreshold: 5,
         BlacklistDuration: 24 * time.Hour,
+        MaxMessageSize:    1024,
+        SolutionTTL:       5 * time.Minute,
+        BufferSize:        1024,
     }
 } 
