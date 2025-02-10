@@ -28,10 +28,28 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
     hash := sha256.Sum256([]byte(combined))
     
     // Проверяем, начинается ли хеш с нужного количества нулевых битов
-    for i := 0; i < p.difficulty; i++ {
-        if hash[i/8]>>(7-(i%8))&1 != 0 {
-            return false
+    leadingZeros := 0
+    for i := 0; i < len(hash); i++ {
+        if hash[i] == 0 {
+            leadingZeros += 8
+        } else {
+            leadingZeros += countLeadingZeros(hash[i])
+            break
         }
     }
-    return true
+    return leadingZeros >= p.difficulty
+}
+
+func countLeadingZeros(b byte) int {
+    count := 0
+    for b&0x80 == 0 {
+        count++
+        b <<= 1
+    }
+    return count
+}
+
+func (p *PoW) GenerateAndVerify(challenge, solution string) (bool, error) {
+    // Проверка решения
+    return p.VerifySolution(challenge, solution), nil
 } 
