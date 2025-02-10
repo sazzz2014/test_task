@@ -46,8 +46,13 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
         return false
     }
     
+    // Проверка формата solution
+    if _, err := hex.DecodeString(solution); err != nil {
+        return false
+    }
+    
     // Проверка длины solution
-    if len(solution) > 64 { // Максимальная длина hex-строки для 32 байт
+    if len(solution) > 64 { 
         return false
     }
     
@@ -55,11 +60,9 @@ func (p *PoW) VerifySolution(challenge, solution string) bool {
     combined := challenge + solution
     hash := sha256.Sum256([]byte(combined))
     
-    // Проверка битов (оптимизированная версия)
+    // Оптимизированная битовая проверка
     for i := 0; i < p.difficulty; i++ {
-        byteIndex := i / 8
-        bitIndex := 7 - (i % 8)
-        if (hash[byteIndex] >> bitIndex) & 1 != 0 {
+        if (hash[i/8] >> (7 - (i % 8))) & 1 != 0 {
             return false
         }
     }
