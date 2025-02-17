@@ -7,13 +7,19 @@ import (
 	"server/internal/config"
 )
 
+// IPControl управляет ограничением запросов по IP
 type IPControl struct {
+	// mu мьютекс для синхронизации доступа к данным
 	mu            sync.RWMutex
+	// requests хранит историю запросов для каждого IP
 	requests      map[string][]time.Time
+	// blacklist содержит заблокированные IP и время окончания блокировки
 	blacklist     map[string]time.Time
+	// config содержит настройки ограничений
 	config        *config.Config
 }
 
+// NewIPControl создает новый экземпляр контроля IP
 func NewIPControl(cfg *config.Config) *IPControl {
 	ic := &IPControl{
 		requests:  make(map[string][]time.Time),
@@ -27,6 +33,7 @@ func NewIPControl(cfg *config.Config) *IPControl {
 	return ic
 }
 
+// IsAllowed проверяет, разрешен ли доступ для данного IP
 func (ic *IPControl) IsAllowed(ip string) bool {
 	ic.mu.Lock()
 	defer ic.mu.Unlock()
@@ -65,6 +72,7 @@ func (ic *IPControl) IsAllowed(ip string) bool {
 	return true
 }
 
+// cleanup периодически очищает устаревшие записи
 func (ic *IPControl) cleanup() {
 	ticker := time.NewTicker(time.Minute)
 	for range ticker.C {

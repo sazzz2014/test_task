@@ -7,14 +7,20 @@ import (
 	"time"
 )
 
+// Solver реализует решатель Proof of Work
 type Solver struct {
+	// difficulty определяет сложность решения (количество начальных нулевых битов)
 	difficulty int
 }
 
+// NewSolver создает новый экземпляр решателя с заданной сложностью
 func NewSolver(difficulty int) *Solver {
 	return &Solver{difficulty: difficulty}
 }
 
+// Solve находит решение для данного вызова
+// challenge - строка вызова от сервера
+// Возвращает найденное решение в виде hex строки
 func (s *Solver) Solve(challenge string) string {
 	rand.Seed(time.Now().UnixNano())
 	

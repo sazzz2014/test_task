@@ -107,6 +107,8 @@ func (p *PoW) cleanupRoutine() {
 	}
 }
 
+// GenerateAndVerify генерирует challenge и проверяет решение
+// Используется в тестах
 func (p *PoW) GenerateAndVerify(challenge, solution string) (bool, error) {
 	// Проверка решения
 	return p.VerifySolution(challenge, solution), nil
@@ -121,6 +123,8 @@ func (p *PoW) GetStats() map[string]int64 {
 	}
 }
 
+// GetDetailedStats возвращает детальную статистику работы PoW
+// включая настройки и текущее состояние
 func (p *PoW) GetDetailedStats() map[string]interface{} {
 	return map[string]interface{}{
 		"total_attempts":           p.totalAttempts.Load(),

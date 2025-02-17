@@ -5,35 +5,46 @@ import (
     "time"
 )
 
+// Config содержит все настройки конфигурации сервера
 type Config struct {
-    // Базовые настройки сервера
+    // Port определяет порт, на котором будет работать сервер
     Port            string          // Порт для прослушивания
+    // QuotesFile путь к JSON файлу с цитатами
     QuotesFile      string          // Путь к файлу с цитатами
+    // PowDifficulty задает сложность Proof of Work (количество начальных нулевых битов)
     PowDifficulty   int             // Сложность Proof of Work
     
-    // Таймауты
+    // ReadTimeout максимальное время ожидания чтения данных от клиента
     ReadTimeout     time.Duration   // Таймаут на чтение
+    // WriteTimeout максимальное время ожидания записи данных клиенту
     WriteTimeout    time.Duration   // Таймаут на запись
+    // ShutdownTimeout время ожидания завершения всех соединений при остановке сервера
     ShutdownTimeout time.Duration   // Таймаут на graceful shutdown
     
-    // Ограничения соединений
+    // MaxConnections максимальное количество одновременных подключений к серверу
     MaxConnections  int             // Максимальное число одновременных соединений
+    // ChallengeLength длина генерируемого challenge в байтах
     ChallengeLength int             // Длина challenge для PoW
     
-    // Rate limiting и защита
+    // MaxRequestsPerIP максимальное количество запросов с одного IP в течение RateLimitWindow
     MaxRequestsPerIP    int         // Максимум запросов с одного IP
+    // RateLimitWindow временное окно для подсчета запросов с одного IP
     RateLimitWindow    time.Duration // Временное окно для rate limiting
+    // BlacklistThreshold количество нарушений, после которых IP попадает в черный список
     BlacklistThreshold int          // После скольких нарушений IP попадает в черный список
+    // BlacklistDuration время, на которое IP блокируется при попадании в черный список
     BlacklistDuration  time.Duration // На какое время IP блокируется
     
-    // Ограничения буферов
+    // MaxMessageSize максимальный размер сообщения от клиента в байтах
     MaxMessageSize     int          // Максимальный размер сообщения
+    // BufferSize размер буфера для чтения сообщений в байтах
     BufferSize         int          // Размер буфера для чтения
     
-    // PoW настройки
+    // SolutionTTL время жизни решения PoW
     SolutionTTL        time.Duration // Время жизни решения PoW
 }
-// Проверяет валидность конфигурации
+
+// Validate проверяет корректность настроек конфигурации
 func (c *Config) Validate() error {
     if c.Port == "" {
         return fmt.Errorf("port must be specified")
@@ -50,6 +61,7 @@ func (c *Config) Validate() error {
     return nil
 }
 
+// NewConfig создает новый экземпляр конфигурации с значениями по умолчанию
 func NewConfig() *Config {
     cfg := &Config{
         Port:              ":8080",
