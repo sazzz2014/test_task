@@ -6,24 +6,34 @@ import (
 )
 
 type Config struct {
-    Port            string
-    QuotesFile      string
-    PowDifficulty   int
-    ReadTimeout     time.Duration
-    WriteTimeout    time.Duration
-    MaxConnections  int
-    ChallengeLength int
-    ShutdownTimeout time.Duration
-    // Новые параметры
-    MaxRequestsPerIP    int           // Ограничение запросов с одного IP
-    RateLimitWindow    time.Duration  // Окно для rate limiting
-    BlacklistThreshold int           // Порог для занесения в черный список
-    BlacklistDuration  time.Duration  // Время блокировки IP
-    MaxMessageSize     int           // Максимальный размер сообщения
+    // Базовые настройки сервера
+    Port            string          // Порт для прослушивания
+    QuotesFile      string          // Путь к файлу с цитатами
+    PowDifficulty   int             // Сложность Proof of Work
+    
+    // Таймауты
+    ReadTimeout     time.Duration   // Таймаут на чтение
+    WriteTimeout    time.Duration   // Таймаут на запись
+    ShutdownTimeout time.Duration   // Таймаут на graceful shutdown
+    
+    // Ограничения соединений
+    MaxConnections  int             // Максимальное число одновременных соединений
+    ChallengeLength int             // Длина challenge для PoW
+    
+    // Rate limiting и защита
+    MaxRequestsPerIP    int         // Максимум запросов с одного IP
+    RateLimitWindow    time.Duration // Временное окно для rate limiting
+    BlacklistThreshold int          // После скольких нарушений IP попадает в черный список
+    BlacklistDuration  time.Duration // На какое время IP блокируется
+    
+    // Ограничения буферов
+    MaxMessageSize     int          // Максимальный размер сообщения
+    BufferSize         int          // Размер буфера для чтения
+    
+    // PoW настройки
     SolutionTTL        time.Duration // Время жизни решения PoW
-    BufferSize         int           // Размер буфера для чтения
 }
-
+// Проверяет валидность конфигурации
 func (c *Config) Validate() error {
     if c.Port == "" {
         return fmt.Errorf("port must be specified")
